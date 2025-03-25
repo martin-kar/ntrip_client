@@ -61,6 +61,10 @@ class NTRIPClient(NTRIPBase):
     self._first_rtcm_received = False
     self._recv_rtcm_last_packet_timestamp = 0
 
+    self._has_logged_send_nmea_fail = False
+    self._has_logged_receive_rtcm_fail = False
+    self._has_logged_connection = False
+
     # Public reconnect info
     self.rtcm_timeout_seconds = self.DEFAULT_RTCM_TIMEOUT_SECONDS
 
@@ -110,6 +114,9 @@ class NTRIPClient(NTRIPBase):
     # Properly handle the response
     if any(success in response for success in _SUCCESS_RESPONSES):
       self._connected = True
+      if not self._has_logged_connection:
+        self._loginfo('Connected to RTK server.')
+        self._has_logged_connection = True
 
     # Some debugging hints about the kind of error we received
     known_error = False
@@ -139,6 +146,7 @@ class NTRIPClient(NTRIPBase):
   def disconnect(self):
     # Disconnect the socket
     self._connected = False
+    self._has_logged_connection = False
     try:
       if self._server_socket:
         self._server_socket.shutdown(socket.SHUT_RDWR)
@@ -158,8 +166,12 @@ class NTRIPClient(NTRIPBase):
 
   def send_nmea(self, sentence):
     if not self._connected:
-      self._logwarn('NMEA sent before client was connected, discarding NMEA')
+      if not self._has_logged_send_nmea_fail:
+        self._logwarn('NMEA sent before client was connected, discarding NMEA')
+        self._has_logged_send_nmea_fail = True
       return
+    else:
+      self._has_logged_send_nmea_fail = False
 
     # Not sure if this is the right thing to do, but python will escape the return characters at the end of the string, so do this manually
     if sentence[-4:] == '\\r\\n':
@@ -188,8 +200,12 @@ class NTRIPClient(NTRIPBase):
 
   def recv_rtcm(self):
     if not self._connected:
-      self._logwarn('RTCM requested before client was connected, returning empty list')
+      if not self._has_logged_receive_rtcm_fail:
+        self._logwarn('RTCM requested before client was connected, returning empty list')
+        self._has_logged_receive_rtcm_fail = True
       return []
+    else:
+      self._has_logged_receive_rtcm_fail = False
 
     # If it has been too long since we received an RTCM packet, reconnect
     if time.time() - self.rtcm_timeout_seconds >= self._recv_rtcm_last_packet_timestamp and self._first_rtcm_received:
