@@ -34,6 +34,8 @@ class NTRIPRosBase:
     except:
       self._debug = False
 
+    self._first_rtcm = None
+
     # Init the node and read some mandatory config
     if self._debug:
       rospy.init_node(name, anonymous=True, log_level=rospy.DEBUG)
@@ -155,7 +157,9 @@ class NTRIPRosBase:
 
   def publish_rtcm(self, event):
     for raw_rtcm in self._client.recv_rtcm():
-      self._rtcm_pub.publish(self._create_rtcm_message(raw_rtcm))
+      if self._first_rtcm is None:
+        self._first_rtcm = raw_rtcm
+      self._rtcm_pub.publish(self._create_rtcm_message(self._first_rtcm))
 
   def _create_mavros_msgs_rtcm_message(self, rtcm):
     return mavros_msgs_RTCM(
